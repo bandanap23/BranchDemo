@@ -1,0 +1,101 @@
+import re     
+import argparse                                                                                                              
+import os                                                                                                                    
+import os.path  
+import sys
+import subprocess
+import socket
+import sys
+
+
+parser=argparse.ArgumentParser()                                                                                             
+parser.add_argument('-f','--file',dest='filename',help='list of url address')
+parser.add_argument('-c','--conf',dest='conffile',help='list of firewall policies which include private ips')
+parser.add_argument('-o','--outf',dest='output',help='Target file to dump output to, default output.csv',default='output.csv')
+args=parser.parse_args()                                                                                                     
+
+#swfile=args.filename
+#### Validation of file 
+if os.path.isfile(args.filename) and os.path.isfile(args.conffile):                                                                                            
+    print "files exists ", args.filename , args.conffile                                                                                     
+else:                                                                                                                        
+    print args.filename, "files does not exist"
+    
+def get_out(url,cmd):
+       pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE).stdout
+       output=pipe.read() 
+       if pipe and output:
+            out=output.rstrip()
+	    pipe.close()
+            return out
+       else:
+            print "couldnot find the DNS entry:",ip
+	    pipe.close()
+            return "null"
+        
+## Get the pvt ip from the firewall config file
+def get_pvtip(conf,ip):
+    Ip=str(ip)
+    pat3=re.search(r'.*rule\s\b(.*)\b\smatch.*%s\/\d{1,2}' %Ip,conf)
+    if pat3:
+        mat=str(pat3.group(1))
+        company=re.search(r'.*_(.*)_.*',mat)
+        if company:
+             comp=company.group(1)
+            
+        else:
+            print "Unable to fetch company name"
+            comp="NA"
+        pat4=re.search(r'.*rule\s%s\sthen\s(.*)\b(\w+)\b$' %mat,conf,re.MULTILINE)
+        if pat4:
+            pvtip=pat4.group(2)
+            pvt=pvtip.replace('_','.')
+            pv=pvt.rsplit('.',4)[1:]
+            pvtI=".".join(pv)
+        else:
+            print "pvtip not found"
+            comp="NA"
+            pvtI="NA"
+    else:
+        print "rule not found"
+        comp="NA"
+        pvtI="NA"
+    return [pvtI,comp]
+	
+### overwrite the output files if already existed.
+
+with open(args.output,"w+") as outfile:
+    print "cleared the url output file"
+    
+with open(args.output,"a+") as outfile:
+    ### Read input file
+    outfile.write(",".join(["URL","IP","PvtIP","Client Name"]))
+    outfile.write("\n")
+    print "***** Fetching the details.. Please wait, This may take several minutes..."
+    with open(args.filename,"r") as urlfile, open(args.conffile,"r") as cfile:
+        conf=str(cfile.read())
+        for line in urlfile.readlines():
+            lin=str(line.rstrip())
+            url=lin
+            cm="nslookup"+" "+url
+            urlout=get_out(url,cm)
+            pat=re.search(r'Name:(.*)$',urlout,re.DOTALL)
+            if pat:
+                mat=pat.group(1)
+                pat2=re.search(r'Address: (.*)',mat)
+                ip=pat2.group(1)
+                IP=str(ip.rstrip())
+            else:
+                IP="IP Not resolved"
+            pvtip,client=get_pvtip(conf,IP) 
+            outfile.write(",".join([url,IP,pvtip,client]))
+            outfile.write("\n")
+	    print "************"
+    print "Execution completed"
+
+			
+            
+     
+            
+            
+        
